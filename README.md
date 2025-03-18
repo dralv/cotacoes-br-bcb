@@ -1,48 +1,82 @@
-Overview
-========
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
 
-Project Contents
-================
 
-Your Astro project contains the following files and folders:
+# Documentação do DAG `fin_cotacoes_bcb_classic`
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+Este DAG realiza o processo de ETL (Extração, Transformação e Carga) para obter dados de cotações do Banco Central do Brasil e armazená-los em uma tabela no PostgreSQL. 
 
-Deploy Your Project Locally
-===========================
+## Estrutura do DAG
+O DAG está dividido nas seguintes tarefas:
 
-1. Start Airflow on your local machine by running 'astro dev start'.
+1. **Extract**: Extrai dados de cotações diárias do site do Banco Central.
+2. **Transform**: Transforma os dados, aplicando tipagem e formatação adequada.
+3. **Create Table**: Cria a tabela `cotacoes` no PostgreSQL caso ainda não exista.
+4. **Load**: Realiza o carregamento dos dados transformados para a tabela `cotacoes`, com suporte para operação de upsert.
 
-This command will spin up 4 Docker containers on your machine, each for a different Airflow component:
+## Requisitos
 
-- Postgres: Airflow's Metadata Database
-- Webserver: The Airflow component responsible for rendering the Airflow UI
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+### Instalação do Homebrew
 
-2. Verify that all 4 Docker containers were created by running 'docker ps'.
+O [Homebrew](https://brew.sh/) é necessário para instalar o Astronomer CLI de maneira conveniente.
 
-Note: Running 'astro dev start' will start your project with the Airflow Webserver exposed at port 8080 and Postgres exposed at port 5432. If you already have either of those ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
+Para instalar o Homebrew, execute o seguinte comando no terminal:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
-3. Access the Airflow UI for your local Airflow project. To do so, go to http://localhost:8080/ and log in with 'admin' for both your Username and Password.
+Após a instalação, certifique-se de adicionar o Homebrew ao seu PATH:
+```bash
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
 
-You should also be able to access your Postgres Database at 'localhost:5432/postgres'.
+### Instalação do Astronomer CLI
 
-Deploy Your Project to Astronomer
-=================================
+Utilize o Homebrew para instalar o Astronomer CLI. Execute o comando:
+```bash
+brew install astronomer/tap/astro
+```
 
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+Verifique se a instalação foi bem-sucedida com o comando:
+```bash
+astro version
+```
 
-Contact
-=======
+## Inicializando o Astronomer
 
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+Para inicializar o Astronomer e configurar o ambiente para o DAG, execute o comando abaixo no diretório do projeto:
+```bash
+astro dev start
+```
+
+Esse comando inicializa o ambiente local do Airflow configurado no Astronomer, permitindo executar o DAG `fin_cotacoes_bcb_classic`.
+
+## Estrutura do Código
+
+Abaixo está uma descrição das principais funções e tarefas do DAG:
+
+### Função `extract`
+
+Extrai os dados CSV da API do Banco Central com as cotações do dia anterior. Em caso de sucesso, retorna o conteúdo do CSV como uma string.
+
+### Função `transform`
+
+Transforma os dados extraídos em um DataFrame do Pandas, aplicando tipos de dados, formatando datas e adicionando uma coluna `DT_PROCESSAMENTO` com a data e hora atuais.
+
+### Função `create_table`
+
+Define o DDL SQL para criar a tabela `cotacoes`, que armazena os dados das cotações no PostgreSQL.
+
+### Função `load`
+
+Carrega o DataFrame transformado para o PostgreSQL. A função utiliza o método `insert_rows` para inserir ou atualizar registros existentes.
+
+## Fluxo do DAG
+
+As tarefas são executadas na seguinte ordem:
+
+1. `extract_task` → Extrai os dados do CSV.
+2. `transform_task` → Transforma os dados extraídos em um DataFrame.
+3. `create_table_postgres_task` → Cria a tabela `cotacoes` no PostgreSQL (se não existir).
+4. `load_task` → Carrega os dados transformados na tabela `cotacoes`.
+
